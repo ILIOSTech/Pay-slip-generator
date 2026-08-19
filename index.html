@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payslip Generator</title>
+<!-- Libraries are bundled in the vendor/ folder so the site works offline.
+     If a file is missing, it is fetched from the CDN as a fallback. -->
+<script src="vendor/xlsx.full.min.js"></script>
+<script src="vendor/html2canvas.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script>
+(function(){
+  var cdn=[
+    ['XLSX'      ,'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'],
+    ['html2canvas','https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'],
+    ['jspdf'     ,'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'],
+    ['JSZip'     ,'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js']
+  ];
+  cdn.forEach(function(p){
+    if(!window[p[0]]){
+      document.write('<script src="'+p[1]+'"><\/script>');
+    }
+  });
+})();
+</script>
+<style>
+:root{
+  --bg:#f1f4f9; --card:#ffffff; --ink:#111827; --muted:#6b7280;
+  --line:#e2e6ee; --brand:#0b5cab; --brand-dk:#084a8b; --brand-soft:#e8f1fb;
+  --ok:#0a7c42; --ok-soft:#e6f5ed; --warn:#b45309; --warn-soft:#fef3c7;
+  --danger:#b42318; --danger-soft:#fee4e2;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header.top{background:linear-gradient(135deg,var(--brand),#0a4d92);color:#fff;padding:18px 24px;box-shadow:0 2px 10px rgba(0,0,0,.12)}
+header.top h1{margin:0;font-size:21px;letter-spacing:.2px}
+header.top p{margin:4px 0 0;opacity:.85;font-size:13px}
+.wrap{max-width:1400px;margin:0 auto;padding:22px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(16,24,40,.05)}
+.card h2{margin:0 0 4px;font-size:16px;display:flex;align-items:center;gap:10px}
+.step{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:700;flex:none}
+.hint{color:var(--muted);font-size:13px;margin:0 0 16px 36px}
+.grid{display:grid;gap:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.g4,.g3{grid-template-columns:1fr 1fr}}
+label.f{display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:5px}
+input,select{width:100%;padding:9px 10px;border:1px solid #cfd6e2;border-radius:8px;font-size:14px;font-family:inherit;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid var(--brand-soft);border-color:var(--brand)}
+button{font-family:inherit;font-size:14px;font-weight:600;border-radius:8px;border:1px solid transparent;padding:10px 16px;cursor:pointer;transition:.15s}
+.btn{background:var(--brand);color:#fff}
+.btn:hover{background:var(--brand-dk)}
+.btn2{background:#fff;color:var(--brand);border-color:#bcd4ee}
+.btn2:hover{background:var(--brand-soft)}
+.btn3{background:#fff;color:#374151;border-color:#cfd6e2}
+.btn3:hover{background:#f3f4f6}
+.btn-sm{padding:5px 10px;font-size:12px;font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+.drop{border:2px dashed #b9c7dc;border-radius:12px;padding:30px;text-align:center;background:#fafcff;cursor:pointer;transition:.15s}
+.drop:hover,.drop.over{border-color:var(--brand);background:var(--brand-soft)}
+.drop .big{font-size:15px;font-weight:700;color:var(--brand)}
+.drop .sm{font-size:12.5px;color:var(--muted);margin-top:6px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.bar .spacer{flex:1}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:640px}
+table.emp{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;white-space:nowrap}
+table.emp th{position:sticky;top:0;background:#f7f9fc;z-index:3;padding:9px 8px;text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;color:#4b5563;border-bottom:1px solid var(--line)}
+table.emp td{padding:4px 6px;border-bottom:1px solid #f0f2f7;vertical-align:middle}
+table.emp tr:hover td{background:#fbfdff}
+table.emp input{padding:5px 7px;font-size:12.5px;border-radius:6px;border-color:#dfe5ee;background:transparent}
+table.emp input:hover{background:#fff;border-color:#cfd6e2}
+table.emp input.num{text-align:right}
+td.calc{text-align:right;font-variant-numeric:tabular-nums;color:#374151}
+td.calc.net{font-weight:700;color:var(--ok)}
+.w-name{min-width:190px}.w-desig{min-width:150px}.w-id{min-width:112px}.w-type{min-width:110px}
+.w-doj{min-width:100px}.w-uan{min-width:130px}.w-days{min-width:74px}.w-amt{min-width:96px}
+.chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}
+.chip.off{background:#f1f2f4;color:#6b7280}
+.tot{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:16px}
+@media(max-width:900px){.tot{grid-template-columns:1fr 1fr}}
+.tot div{background:#f7f9fc;border:1px solid var(--line);border-radius:10px;padding:12px}
+.tot span{display:block;font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.tot b{font-size:18px;font-variant-numeric:tabular-nums}
+.msg{padding:11px 14px;border-radius:9px;font-size:13px;margin-bottom:14px;display:none}
+.msg.show{display:block}
+.msg.ok{background:var(--ok-soft);color:#065f36;border:1px solid #b7e4c9}
+.msg.warn{background:var(--warn-soft);color:#7c4a03;border:1px solid #fcd9a0}
+.msg.err{background:var(--danger-soft);color:#912018;border:1px solid #fbc4bd}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.66);display:none;align-items:flex-start;justify-content:center;z-index:100;padding:24px;overflow:auto}
+.modal.show{display:flex}
+.modal-inner{background:#fff;border-radius:12px;max-width:860px;width:100%;padding:18px}
+.modal-bar{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+.modal-bar h3{margin:0;font-size:16px;flex:1}
+/* ============ PAYSLIP ============ */
+#slipHost{position:fixed;left:-99999px;top:0}
+.slip{width:794px;background:#fff;padding:38px 42px;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a;font-size:12px}
+.slip .co{text-align:center;border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:16px}
+.slip .co h1{margin:0;font-size:19px;letter-spacing:1.2px;font-weight:bold}
+.slip .co .addr{font-size:11px;color:#444;margin-top:4px}
+.slip .co .mon{font-size:13px;font-weight:bold;margin-top:12px}
+.slip .row2{display:flex;gap:18px;margin-bottom:18px}
+.slip .sumbox{flex:1.55}
+.slip .netbox{flex:1;border:1px solid #d0d0d0;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 10px;background:#fafafa}
+.slip .sec{font-size:11.5px;font-weight:bold;margin-bottom:8px;color:#111}
+.slip table{width:100%;border-collapse:collapse}
+.slip .kv td{padding:4.5px 0;font-size:11.5px;vertical-align:top}
+.slip .kv td.k{color:#555;width:47%}
+.slip .kv td.v{font-weight:bold;color:#111}
+.slip .netbox .amt{font-size:27px;font-weight:bold;margin:6px 0}
+.slip .netbox .lbl{font-size:10.5px;color:#555;text-transform:uppercase;letter-spacing:.5px}
+.slip .netbox .sub{font-size:10.5px;color:#666}
+.slip table.bx{border:1px solid #ccc;margin-bottom:16px}
+.slip table.bx th{background:#ea580c;color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;padding:8px 10px;text-align:left;border:1px solid #d04a08;font-weight:bold}
+.slip table.bx th.r,.slip table.bx td.r{text-align:right}
+.slip table.bx td{padding:7px 10px;border:1px solid #e2e2e2;font-size:11.5px}
+.slip table.bx tr.tline td{font-weight:bold;background:#fff3e6;border-top:1.5px solid #ea580c;color:#111}
+.slip table.bx col.c1,.slip table.bx col.c3{width:32%}
+.slip table.bx col.c2,.slip table.bx col.c4{width:18%}
+.slip .words{border:1px solid #ea580c;background:#ea580c;color:#fff;padding:11px;text-align:center;font-size:11.5px;font-weight:bold;border-radius:4px}
+.slip .sign{margin-top:52px;text-align:right;font-size:11px}
+.slip .sign .ln{display:inline-block;border-top:1px solid #666;padding-top:5px;min-width:180px;text-align:center}
+.slip .foot{margin-top:22px;text-align:center;font-size:9.5px;color:#888;border-top:1px solid #eee;padding-top:8px}
+#previewBox{transform-origin:top left;overflow:hidden}
+.overlay{position:fixed;inset:0;background:rgba(255,255,255,.86);display:none;align-items:center;justify-content:center;flex-direction:column;z-index:200}
+.overlay.show{display:flex}
+.spin{width:44px;height:44px;border:4px solid #dbe4f0;border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.overlay p{margin-top:14px;font-weight:600;color:var(--brand)}
+details.help{margin-top:6px}
+details.help summary{cursor:pointer;color:var(--brand);font-size:13px;font-weight:600}
+details.help div{margin-top:10px;font-size:13px;line-height:1.65;color:#374151;background:#f7f9fc;padding:14px;border-radius:8px;border:1px solid var(--line)}
+details.help code{background:#eef2f7;padding:1px 5px;border-radius:4px;font-size:12px}
+.upload-box{display:flex;align-items:center;gap:12px}
+.upload-box .thumb{width:48px;height:48px;border:1px dashed #cfd6e2;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#f9fafb;flex-shrink:0}
+.upload-box .thumb img{max-width:100%;max-height:100%;object-fit:contain}
+.upload-box .thumb.has-img{border-style:solid;border-color:var(--brand)}
+.upload-box .btns{display:flex;gap:6px;flex-wrap:wrap}
+.upload-box .btns button{padding:5px 10px;font-size:11.5px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Payslip Generator</h1>
+  <p>Upload the Payslip Register &rarr; check the figures &rarr; download every payslip as PDF</p>
+</header>
+
+<div class="wrap">
+
+<!-- STEP 1 -->
+<div class="card">
+  <h2><span class="step">1</span> Company &amp; Month</h2>
+  <p class="hint">These appear on the top of every payslip. Set them once each month.</p>
+  <div class="grid g4">
+    <div style="grid-column:span 2">
+      <label class="f">Company Name</label>
+      <input id="coName" value="ILIOS TECHNOLOGY">
+    </div>
+    <div style="grid-column:span 2">
+      <label class="f">Company Address</label>
+      <input id="coAddr" value="9 RAJ KUMAR BOSE LANE KOLKATA 700013">
+    </div>
+    <div>
+      <label class="f">Payslip Month</label>
+      <select id="month"></select>
+    </div>
+    <div>
+      <label class="f">Year</label>
+      <input id="year" type="number" value="2026">
+    </div>
+    <div>
+      <label class="f">Signatory Label</label>
+      <input id="signLbl" value="Authorised Signatory">
+    </div>
+    <div>
+      <label class="f">Currency Symbol</label>
+      <input id="cur" value="₹">
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:14px">
+    <div>
+      <label class="f">Company Logo</label>
+      <div class="upload-box">
+        <div class="thumb" id="logoThumb"><span style="font-size:11px;color:var(--muted)">Logo</span></div>
+        <div class="btns">
+          <button class="btn2 btn-sm" onclick="document.getElementById('logoFile').click()">Upload Logo</button>
+          <button class="btn3 btn-sm" onclick="clearLogo()">Clear</button>
+        </div>
+        <input id="logoFile" type="file" accept="image/*" style="display:none" onchange="loadLogo(this)">
+      </div>
+    </div>
+    <div>
+      <label class="f">Company Stamp</label>
+      <div class="upload-box">
+        <div class="thumb" id="stampThumb"><span style="font-size:11px;color:var(--muted)">Stamp</span></div>
+        <div class="btns">
+          <button class="btn2 btn-sm" onclick="document.getElementById('stampFile').click()">Upload Stamp</button>
+          <button class="btn3 btn-sm" onclick="clearStamp()">Clear</button>
+        </div>
+        <input id="stampFile" type="file" accept="image/*" style="display:none" onchange="loadStamp(this)">
+      </div>
+    </div>
+    <div>
+      <label class="f">Authorised Signature</label>
+      <div class="upload-box">
+        <div class="thumb" id="sigThumb"><span style="font-size:11px;color:var(--muted)">Signature</span></div>
+        <div class="btns">
+          <button class="btn2 btn-sm" onclick="document.getElementById('sigFile').click()">Upload Signature</button>
+          <button class="btn3 btn-sm" onclick="clearSig()">Clear</button>
+        </div>
+        <input id="sigFile" type="file" accept="image/*" style="display:none" onchange="loadSig(this)">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 2 -->
+<div class="card">
+  <h2><span class="step">2</span> Load Employees</h2>
+  <p class="hint">Upload your <b>Payslip Register</b> Excel file. You can also add or edit people by hand afterwards.</p>
+  <div id="drop" class="drop">
+    <div class="big">📄 Click here, or drag your Payslip Register (.xlsx) into this box</div>
+    <div class="sm">Reads the standard register columns: Employee Name, Designation, Employee ID, Date of Joining, Pay Days, UAN Number, Basic, Gross, P.Tax</div>
+  </div>
+  <input id="file" type="file" accept=".xlsx,.xls,.csv" style="display:none">
+  <div id="msg" class="msg"></div>
+  <details class="help">
+    <summary>How the figures are worked out</summary>
+    <div>
+      <b>Basic</b> = taken from the register; if blank, 50% of Gross.<br>
+      <b>Special Allowance</b> = Gross &minus; Basic.<br>
+      <b>PF Employee</b> = 12% of Basic &nbsp;|&nbsp; <b>PF Employer</b> = 13% of Basic (rounded to the nearest rupee).<br>
+      <b>ESIC Employee</b> = 0.75% of Gross &nbsp;|&nbsp; <b>ESIC Employer</b> = 3.25% of Gross (rounded <i>up</i> to the next rupee, as the ESIC rules require &mdash; this replaces the manual "+1" adjustments in the register).<br>
+      <b>P.Tax</b> = West Bengal slab, filled in automatically: up to &#8377;10,000 &rarr; 0 &nbsp;|&nbsp; 10,001&ndash;15,000 &rarr; 110 &nbsp;|&nbsp; 15,001&ndash;25,000 &rarr; 130 &nbsp;|&nbsp; 25,001&ndash;40,000 &rarr; 150 &nbsp;|&nbsp; above 40,000 &rarr; 200. You can overtype it.<br>
+      <b>Net Pay</b> = Gross &minus; PF Employee &minus; ESIC Employee &minus; P.Tax.<br>
+      <b>Monthly CTC</b> = Gross + PF Employer + ESIC Employer.<br>
+      <b>PF / ESIC columns</b> start from your register (a 0 there means the person is exempt) and otherwise from the statutory test &mdash; PF when a UAN exists, ESIC when Gross is &#8377;21,000 or less. Untick the box for anyone who should not be deducted.<br>
+      <b>Pay Days</b> shows as a plain number of days &mdash; no "8 / 26".<br>
+      Every amount on the payslip is a whole rupee, and Net Pay always equals the printed Gross minus the printed deductions.
+    </div>
+  </details>
+</div>
+
+<!-- STEP 3 -->
+<div class="card">
+  <h2><span class="step">3</span> Check &amp; Edit</h2>
+  <p class="hint">Anything in a box can be typed over. Grey figures are calculated for you and update instantly.</p>
+  <div class="bar">
+    <button class="btn2" onclick="addRow()">+ Add Employee</button>
+    <button class="btn3" onclick="selAll(true)">Select All</button>
+    <button class="btn3" onclick="selAll(false)">Clear Selection</button>
+    <button class="btn3" onclick="delSel()">Delete Selected</button>
+    <div class="spacer"></div>
+    <input id="search" placeholder="Search name / ID…" style="width:230px" oninput="render()">
+  </div>
+  <div class="tablewrap">
+    <table class="emp">
+      <thead><tr>
+        <th style="width:34px"><input type="checkbox" id="chkAll" onchange="selAll(this.checked)" style="width:auto"></th>
+        <th class="w-name">Employee Name</th>
+        <th class="w-desig">Designation</th>
+        <th class="w-id">Employee ID</th>
+        <th class="w-type">Type</th>
+        <th class="w-doj">Joining</th>
+        <th class="w-uan">UAN</th>
+        <th class="w-days">Pay Days</th>
+        <th class="w-amt">Gross</th>
+        <th class="w-amt">Basic</th>
+        <th style="width:44px">PF</th>
+        <th style="width:52px">ESIC</th>
+        <th class="w-days">P.Tax</th>
+        <th style="text-align:right">Deductions</th>
+        <th style="text-align:right">Net Pay</th>
+        <th style="text-align:right">CTC</th>
+        <th style="width:150px"></th>
+      </tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+  <div class="tot">
+    <div><span>Employees</span><b id="tCount">0</b></div>
+    <div><span>Total Gross</span><b id="tGross">0</b></div>
+    <div><span>Total Deductions</span><b id="tDed">0</b></div>
+    <div><span>Total Net Payable</span><b id="tNet">0</b></div>
+    <div><span>Total CTC</span><b id="tCtc">0</b></div>
+  </div>
+</div>
+
+<!-- STEP 4 -->
+<div class="card">
+  <h2><span class="step">4</span> Download Payslips</h2>
+  <p class="hint">Tick the people you want, then download. Each payslip is a separate document; "Download All" packs them into one ZIP file.</p>
+  <div class="bar">
+    <button class="btn" onclick="zipAll()">⬇ Download All (PDF ZIP)</button>
+    <button class="btn" style="background:#0a7c42;color:#fff" onclick="zipAllWord()">⬇ Download All (Word ZIP)</button>
+    <button class="btn2" onclick="exportRegister()">⬇ Download Calculated Register (Excel)</button>
+    <button class="btn3" onclick="saveLocal()">💾 Save Data in Browser</button>
+    <button class="btn3" onclick="loadLocal()">↺ Restore Saved Data</button>
+  </div>
+</div>
+
+</div><!-- /wrap -->
+
+<div class="modal" id="modal">
+  <div class="modal-inner">
+    <div class="modal-bar">
+      <h3 id="mTitle">Payslip Preview</h3>
+      <button class="btn" onclick="dlCurrent()">⬇ Download PDF</button>
+      <button class="btn2" style="background:#0a7c42;color:#fff" onclick="dlCurrentWord()">⬇ Download Word</button>
+      <button class="btn3" onclick="closeModal()">Close</button>
+    </div>
+    <div id="previewBox"></div>
+  </div>
+</div>
+
+<div class="overlay" id="ovl"><div class="spin"></div><p id="ovlTxt">Working…</p></div>
+<div id="slipHost"></div>
+
+<script>
+/* ------------------------------------------------------------------ */
+/*  DATA                                                               */
+/* ------------------------------------------------------------------ */
+const MONTHS=["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
+let rows=[];
+let previewIdx=-1;
+let logoDataUrl='';
+let sigDataUrl='';
+let stampDataUrl='';
+
+/* ------------------------------------------------------------------ */
+/*  LOGO & SIGNATURE UPLOAD                                            */
+/* ------------------------------------------------------------------ */
+
+// Auto-load the default logo from logo.png
+(function loadDefaultLogo(){
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=function(){
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth; c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+    logoDataUrl=c.toDataURL('image/png');
+    const thumb=document.getElementById('logoThumb');
+    if(thumb){ thumb.innerHTML='<img src="'+logoDataUrl+'">'; thumb.classList.add('has-img'); }
+  };
+  img.src='logo.png';
+})();
+
+// Auto-load the default stamp from stamp.png
+(function loadDefaultStamp(){
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  img.onload=function(){
+    const c=document.createElement('canvas');
+    c.width=img.naturalWidth; c.height=img.naturalHeight;
+    c.getContext('2d').drawImage(img,0,0);
+    stampDataUrl=c.toDataURL('image/png');
+    const thumb=document.getElementById('stampThumb');
+    if(thumb){ thumb.innerHTML='<img src="'+stampDataUrl+'">'; thumb.classList.add('has-img'); }
+  };
+  img.src='stamp.png';
+})();
+
+function loadLogo(input){
+  if(!input.files[0]) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    logoDataUrl=e.target.result;
+    const thumb=document.getElementById('logoThumb');
+    thumb.innerHTML='<img src="'+logoDataUrl+'">';
+    thumb.classList.add('has-img');
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+function clearLogo(){
+  logoDataUrl='';
+  const thumb=document.getElementById('logoThumb');
+  thumb.innerHTML='<span style="font-size:11px;color:var(--muted)">Logo</span>';
+  thumb.classList.remove('has-img');
+  document.getElementById('logoFile').value='';
+}
+function loadStamp(input){
+  if(!input.files[0]) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    stampDataUrl=e.target.result;
+    const thumb=document.getElementById('stampThumb');
+    thumb.innerHTML='<img src="'+stampDataUrl+'">';
+    thumb.classList.add('has-img');
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+function clearStamp(){
+  stampDataUrl='';
+  const thumb=document.getElementById('stampThumb');
+  thumb.innerHTML='<span style="font-size:11px;color:var(--muted)">Stamp</span>';
+  thumb.classList.remove('has-img');
+  document.getElementById('stampFile').value='';
+}
+function loadSig(input){
+  if(!input.files[0]) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    sigDataUrl=e.target.result;
+    const thumb=document.getElementById('sigThumb');
+    thumb.innerHTML='<img src="'+sigDataUrl+'">';
+    thumb.classList.add('has-img');
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+function clearSig(){
+  sigDataUrl='';
+  const thumb=document.getElementById('sigThumb');
+  thumb.innerHTML='<span style="font-size:11px;color:var(--muted)">Signature</span>';
+  thumb.classList.remove('has-img');
+  document.getElementById('sigFile').value='';
+}
+
+(function initMonth(){
+  const s=document.getElementById('month');
+  MONTHS.forEach((m,i)=>{const o=document.createElement('option');o.value=m;o.textContent=m;s.appendChild(o);});
+  const d=new Date(); s.value=MONTHS[d.getMonth()]; document.getElementById('year').value=d.getFullYear();
+})();
+
+/* ------------------------------------------------------------------ */
+/*  CALCULATION ENGINE  (mirrors the Payslip Register)                 */
+/* ------------------------------------------------------------------ */
+const R  = n => Math.round((Number(n)||0) + Number.EPSILON);      // nearest rupee
+const RU = n => Math.ceil((Number(n)||0) - 1e-9);                 // next rupee (ESIC rule)
+
+function ptaxWB(gross){                                            // West Bengal slab
+  const g=Number(gross)||0;
+  if(g<=10000) return 0;
+  if(g<=15000) return 110;
+  if(g<=25000) return 130;
+  if(g<=40000) return 150;
+  return 200;
+}
+
+function calc(r){
+  const gross = R(r.gross);
+  let basic = (r.basic===''||r.basic===null||r.basic===undefined) ? gross*0.5 : Number(r.basic);
+  basic = R(basic);
+  if(basic>gross) basic=gross;
+  const spec  = gross - basic;
+
+  const pfEe   = r.pf   ? R(basic*0.12)   : 0;
+  const pfEr   = r.pf   ? R(basic*0.13)   : 0;
+  const esicEe = r.esic ? RU(gross*0.0075): 0;
+  const esicEr = r.esic ? RU(gross*0.0325): 0;
+  const ptax   = (r.ptax===''||r.ptax===null||r.ptax===undefined) ? ptaxWB(gross) : R(r.ptax);
+
+  const ded = pfEe + esicEe + ptax;
+  return {gross,basic,spec,pfEe,pfEr,esicEe,esicEr,ptax,ded,
+          net: gross-ded, ctc: gross+pfEr+esicEr};
+}
+
+/* ------------------------------------------------------------------ */
+/*  HELPERS                                                            */
+/* ------------------------------------------------------------------ */
+const CUR = () => document.getElementById('cur').value || '';
+const fmt = n => (Number(n)||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+const money = n => CUR() + fmt(n);
+const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const ONES=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+const TENS=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+function under1000(n){
+  let s='';
+  if(n>99){s+=ONES[Math.floor(n/100)]+' Hundred';n%=100;if(n)s+=' ';}
+  if(n>19){s+=TENS[Math.floor(n/10)];n%=10;if(n)s+=' '+ONES[n];}
+  else if(n>0){s+=ONES[n];}
+  return s;
+}
+function words(num){
+  num=Math.round(Math.abs(Number(num)||0));
+  if(num===0) return 'Zero Only';
+  const cr=Math.floor(num/10000000); num%=10000000;
+  const lk=Math.floor(num/100000);   num%=100000;
+  const th=Math.floor(num/1000);     num%=1000;
+  const parts=[];
+  if(cr) parts.push(under1000(cr)+' Crore');
+  if(lk) parts.push(under1000(lk)+' Lakh');
+  if(th) parts.push(under1000(th)+' Thousand');
+  const rest = num? under1000(num) : '';
+  let out = parts.join(' ');
+  if(rest) out = out ? out+' and '+rest : rest;
+  return out+' Only';
+}
+
+function show(kind,text){
+  const m=document.getElementById('msg');
+  m.className='msg show '+kind; m.innerHTML=text;
+}
+function busy(on,txt){
+  document.getElementById('ovlTxt').textContent=txt||'Working…';
+  document.getElementById('ovl').classList.toggle('show',!!on);
+}
+
+/* ------------------------------------------------------------------ */
+/*  IMPORT REGISTER                                                    */
+/* ------------------------------------------------------------------ */
+const drop=document.getElementById('drop'), fileIn=document.getElementById('file');
+drop.onclick=()=>fileIn.click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('over');};
+drop.ondragleave=()=>drop.classList.remove('over');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files[0])readFile(e.dataTransfer.files[0]);};
+fileIn.onchange=e=>{if(e.target.files[0])readFile(e.target.files[0]);};
+
+const norm = s => String(s==null?'':s).toLowerCase().replace(/[^a-z0-9]/g,'');
+function findCol(hdr,cands){
+  for(const c of cands){
+    const i=hdr.findIndex(h=>norm(h)===norm(c));
+    if(i>=0) return i;
+  }
+  for(const c of cands){
+    const i=hdr.findIndex(h=>norm(h).includes(norm(c)));
+    if(i>=0) return i;
+  }
+  return -1;
+}
+
+function readFile(f){
+  busy(true,'Reading the register…');
+  const rd=new FileReader();
+  rd.onload=ev=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(ev.target.result),{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const aoa=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+
+      // locate the header row (the one containing "Employee Name")
+      let hr=-1;
+      for(let i=0;i<Math.min(aoa.length,15);i++){
+        if((aoa[i]||[]).some(c=>norm(c)==='employeename')){hr=i;break;}
+      }
+      if(hr<0) throw new Error('Could not find a header row containing "Employee Name".');
+      const hdr=aoa[hr].map(x=>x==null?'':x);
+
+      const C={
+        name : findCol(hdr,['Employee Name','Name']),
+        desig: findCol(hdr,['Designation']),
+        id   : findCol(hdr,['Employee ID','Emp ID','Employee Id']),
+        doj  : findCol(hdr,['Date of Joining','DOJ','Joining']),
+        days : findCol(hdr,['Pay Days','Paid Days','Days']),
+        uan  : findCol(hdr,['UAN Number','UAN']),
+        basic: findCol(hdr,['Basic']),
+        gross: findCol(hdr,['Gross']),
+        pfEe : findCol(hdr,["PF_Employee's Contribution","PF Employee","PF_Employee"]),
+        esEe : findCol(hdr,["ESIC_Employee's Contribution","ESIC Employee","ESIC_Employee"]),
+        ptax : findCol(hdr,['P.Tax','PTax','Professional Tax']),
+        type : findCol(hdr,['Employee Type','Type'])
+      };
+      if(C.name<0||C.gross<0) throw new Error('The file needs at least an "Employee Name" and a "Gross" column.');
+
+      const out=[]; let skipped=0;
+      for(let i=hr+1;i<aoa.length;i++){
+        const a=aoa[i]||[];
+        const nm=a[C.name];
+        if(nm==null||String(nm).trim()==='') continue;
+        const gross=numOrNull(a[C.gross]);
+        if(gross===null||gross===0){ skipped++; continue; }
+
+        const uan   = a[C.uan]==null?'':String(a[C.uan]).trim();
+        const pfCol = C.pfEe<0?null:numOrNull(a[C.pfEe]);
+        const esCol = C.esEe<0?null:numOrNull(a[C.esEe]);
+
+        out.push({
+          sel   : true,
+          name  : String(nm).trim(),
+          desig : C.desig<0?'':str(a[C.desig]),
+          id    : C.id<0?'':str(a[C.id]),
+          type  : C.type<0?'Permanent':(str(a[C.type])||'Permanent'),
+          doj   : C.doj<0?'':str(a[C.doj]),
+          uan   : uan,
+          days  : C.days<0?'':(numOrNull(a[C.days])??''),
+          gross : gross,
+          basic : C.basic<0?'':(numOrNull(a[C.basic])??''),
+          pf    : pfCol===null ? !!uan   : pfCol>0,
+          esic  : esCol===null ? gross<=21000 : esCol>0,
+          ptax  : C.ptax<0?'':(numOrNull(a[C.ptax])??'')
+        });
+      }
+      if(!out.length) throw new Error('No employee rows with a Gross amount were found.');
+      rows=out; render(); busy(false);
+      show('ok','<b>Loaded '+out.length+' employees.</b>'+(skipped?' '+skipped+' row(s) with no Gross amount were skipped.':'')+' Check the table below, then download the payslips.');
+      document.getElementById('drop').scrollIntoView({behavior:'smooth',block:'nearest'});
+    }catch(err){
+      busy(false); show('err','<b>Could not read that file.</b> '+esc(err.message));
+    }
+  };
+  rd.onerror=()=>{busy(false);show('err','The file could not be opened.');};
+  rd.readAsArrayBuffer(f);
+}
+function numOrNull(v){
+  if(v===null||v===undefined||v==='') return null;
+  if(typeof v==='number') return isFinite(v)?v:null;
+  const n=parseFloat(String(v).replace(/[^0-9.\-]/g,''));
+  return isFinite(n)?n:null;
+}
+function str(v){ return v==null?'':String(v).trim(); }
+
+/* ------------------------------------------------------------------ */
+/*  TABLE                                                              */
+/* ------------------------------------------------------------------ */
+function getInitials(name){
+  const parts = name.trim().split(/\s+/);
+  if(!parts.length || !parts[0]) return "CO";
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+function render(){
+  const q=(document.getElementById('search').value||'').toLowerCase();
+  const tb=document.getElementById('tbody');
+  tb.innerHTML='';
+  rows.forEach((r,i)=>{
+    if(q && !((r.name+' '+r.id+' '+r.desig).toLowerCase().includes(q))) return;
+    const c=calc(r);
+    const tr=document.createElement('tr');
+    tr.innerHTML=
+      '<td><input type="checkbox" style="width:auto" '+(r.sel?'checked':'')+' onchange="upd('+i+',\'sel\',this.checked)"></td>'+
+      inp(i,'name' ,r.name )+
+      inp(i,'desig',r.desig)+
+      inp(i,'id'   ,r.id   )+
+      inp(i,'type' ,r.type )+
+      inp(i,'doj'  ,r.doj  )+
+      inp(i,'uan'  ,r.uan  )+
+      inpN(i,'days',r.days )+
+      inpN(i,'gross',r.gross)+
+      inpN(i,'basic',c.basic)+
+      '<td style="text-align:center"><input type="checkbox" style="width:auto" '+(r.pf?'checked':'')+' onchange="upd('+i+',\'pf\',this.checked)"></td>'+
+      '<td style="text-align:center"><input type="checkbox" style="width:auto" '+(r.esic?'checked':'')+' onchange="upd('+i+',\'esic\',this.checked)"></td>'+
+      inpN(i,'ptax',c.ptax)+
+      '<td class="calc">'+fmt(c.ded)+'</td>'+
+      '<td class="calc net">'+fmt(c.net)+'</td>'+
+      '<td class="calc">'+fmt(c.ctc)+'</td>'+
+      '<td style="text-align:right;white-space:nowrap">'+
+        '<button class="btn3 btn-sm" onclick="preview('+i+')">Preview</button> '+
+        '<button class="btn2 btn-sm" onclick="dlOne('+i+')">PDF</button> '+
+        '<button class="btn2 btn-sm" style="background:#fff;color:var(--ok);border-color:#b7e4c9" onclick="dlWordOne('+i+')">Word</button>'+
+      '</td>';
+    tb.appendChild(tr);
+  });
+  totals();
+}
+function inp(i,k,v){ return '<td><input value="'+esc(v)+'" onchange="upd('+i+',\''+k+'\',this.value)"></td>'; }
+function inpN(i,k,v){ return '<td><input class="num" value="'+esc(v)+'" onchange="upd('+i+',\''+k+'\',this.value)"></td>'; }
+
+function upd(i,k,v){
+  if(k==='sel'){ rows[i].sel=v; }
+  else if(k==='pf'||k==='esic'){ rows[i][k]=v; rows[i].auto=false; }   // hand-set, stop guessing
+  else if(k==='gross'||k==='basic'||k==='ptax'){
+    const t=String(v).trim();
+    rows[i][k] = t==='' ? '' : (numOrNull(t)??'');
+    if(k==='gross'){
+      rows[i].ptax='';                                                  // re-apply the P.Tax slab
+      if(rows[i].auto) rows[i].esic = (Number(rows[i].gross)||0)<=21000; // new rows: statutory ESIC test
+    }
+  }
+  else if(k==='days'){
+    rows[i][k] = String(v).trim();
+  }
+  else rows[i][k]=v;
+  render();
+}
+function selAll(v){ rows.forEach(r=>r.sel=v); document.getElementById('chkAll').checked=v; render(); }
+function delSel(){
+  const n=rows.filter(r=>r.sel).length;
+  if(!n) return;
+  if(!confirm('Remove '+n+' selected employee(s) from this list? Your Excel file is not changed.')) return;
+  rows=rows.filter(r=>!r.sel); render();
+}
+function addRow(){
+  rows.push({sel:true,auto:true,name:'',desig:'',id:'',type:'Permanent',doj:'',uan:'',days:'',gross:0,basic:'',pf:true,esic:true,ptax:''});
+  render();
+  const tb=document.getElementById('tbody');
+  const last=tb.lastElementChild; if(last){ last.scrollIntoView({block:'nearest'}); last.querySelectorAll('input')[1].focus(); }
+}
+function totals(){
+  let g=0,d=0,n=0,c2=0,k=0;
+  rows.forEach(r=>{const c=calc(r);g+=c.gross;d+=c.ded;n+=c.net;c2+=c.ctc;k++;});
+  document.getElementById('tCount').textContent=k;
+  document.getElementById('tGross').textContent=money(g);
+  document.getElementById('tDed').textContent=money(d);
+  document.getElementById('tNet').textContent=money(n);
+  document.getElementById('tCtc').textContent=money(c2);
+}
+
+/* ------------------------------------------------------------------ */
+/*  PAYSLIP HTML                                                       */
+/* ------------------------------------------------------------------ */
+const COLS='<colgroup><col class="c1"><col class="c2"><col class="c3"><col class="c4"></colgroup>';
+function slipHTML(r){
+  const c=calc(r);
+  const co=document.getElementById('coName').value, ad=document.getElementById('coAddr').value;
+  const mo=document.getElementById('month').value, yr=document.getElementById('year').value;
+  const sg=document.getElementById('signLbl').value;
+  const ln=(a,b,c2,d)=>'<tr><td>'+a+'</td><td class="r">'+money(b)+'</td><td>'+c2+'</td><td class="r">'+money(d)+'</td></tr>';
+  const initials = getInitials(co);
+  const stampCoName = co.toUpperCase();
+  const stampAddrPart = (ad.split(' ')[0] || 'KOLKATA').toUpperCase();
+
+  // Build logo HTML: uploaded image or SVG fallback
+  const logoHTML = logoDataUrl
+    ? '<img src="'+logoDataUrl+'" height="38" style="height:38px; vertical-align:middle; margin-right:8px;">'
+    : '<svg width="34" height="34" viewBox="0 0 100 100" style="vertical-align: middle; margin-right: 6px;">'+
+        '<circle cx="50" cy="50" r="42" fill="none" stroke="#ea580c" stroke-width="8" stroke-dasharray="14 10"/>'+
+        '<circle cx="50" cy="50" r="28" fill="#ea580c"/>'+
+        '<circle cx="50" cy="50" r="16" fill="#facc15"/>'+
+        '<text x="50" y="57" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="bold" fill="#ffffff" text-anchor="middle">'+esc(initials)+'</text>'+
+      '</svg>';
+
+  // Build signature HTML: uploaded image or empty
+  const sigHTML = sigDataUrl
+    ? '<img src="'+sigDataUrl+'" height="50" style="height:50px; display:block; margin:0 auto 4px auto;">'
+    : '';
+
+  // Build stamp HTML: uploaded/autoloaded image or SVG fallback
+  const stampHTML = stampDataUrl
+    ? '<img src="'+stampDataUrl+'" width="110" height="110" style="width:110px; height:110px; object-fit:contain; pointer-events:none;">'
+    : '<svg width="86" height="86" viewBox="0 0 100 100">'+
+        '<circle cx="50" cy="50" r="45" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-dasharray="1 1"/>'+
+        '<circle cx="50" cy="50" r="42" fill="none" stroke="#2563eb" stroke-width="1"/>'+
+        '<circle cx="50" cy="50" r="34" fill="none" stroke="#2563eb" stroke-width="1.2"/>'+
+        '<polygon points="50,38 53,45 60,45 55,49 57,56 50,52 43,56 45,49 40,45 47,45" fill="#2563eb"/>'+
+        '<path id="stampPath_'+r.id+'" d="M 18,50 A 32,32 0 1,1 82,50 A 32,32 0 1,1 18,50" fill="none"/>'+
+        '<text font-family="Arial, Helvetica, sans-serif" font-size="8.5" font-weight="bold" fill="#2563eb" letter-spacing="0.5">'+
+          '<textPath href="#stampPath_'+r.id+'" startOffset="25%" text-anchor="middle">'+esc(stampCoName)+'</textPath>'+
+        '</text>'+
+        '<path id="stampPathBottom_'+r.id+'" d="M 82,50 A 32,32 0 0,1 18,50" fill="none"/>'+
+        '<text font-family="Arial, Helvetica, sans-serif" font-size="7.5" font-weight="bold" fill="#2563eb" letter-spacing="0.5">'+
+          '<textPath href="#stampPathBottom_'+r.id+'" startOffset="50%" text-anchor="middle">★ '+esc(stampAddrPart)+' ★</textPath>'+
+        '</text>'+
+      '</svg>';
+
+  return '<div class="slip">'+
+    // Header section
+    '<table style="width: 100%; border-collapse: collapse; margin-bottom: 2px;">'+
+      '<tr>'+
+        '<td style="text-align: center; vertical-align: middle;">'+
+          '<div style="display: inline-flex; align-items: center; justify-content: center; gap: 8px;">'+
+            logoHTML+
+            '<span style="font-size: 21px; font-weight: bold; color: #ea580c; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0.8px; vertical-align: middle;">'+esc(co)+'</span>'+
+          '</div>'+
+          '<div style="font-size: 11px; font-weight: bold; color: #0b5cab; margin-top: 5px; font-family: Arial, Helvetica, sans-serif;">'+esc(ad)+'</div>'+
+        '</td>'+
+      '</tr>'+
+    '</table>'+
+    '<div style="border-bottom: 2px solid #333; margin: 8px 0 12px 0;"></div>'+
+    '<div style="text-align: center; font-size: 13.5px; font-weight: bold; font-family: Arial, Helvetica, sans-serif; margin-bottom: 16px; color: #000;">'+
+      'Payslip for the Month of '+esc(mo)+', '+esc(yr)+
+    '</div>'+
+
+    // Summary and Net Pay Block
+    '<table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; border: 1px solid #d0d0d0;">'+
+      '<tr>'+
+        '<th style="width: 60%; background: #e8f1fb; border: 1px solid #d0d0d0; padding: 7px 10px; font-size: 11.5px; font-weight: bold; text-align: left; color: #111; font-family: Arial, Helvetica, sans-serif;">Employee Pay Summary</th>'+
+        '<th style="width: 40%; background: #e8f1fb; border: 1px solid #d0d0d0; padding: 7px 10px; font-size: 11.5px; font-weight: bold; text-align: center; color: #111; font-family: Arial, Helvetica, sans-serif;">Employee Net Pay</th>'+
+      '</tr>'+
+      '<tr>'+
+        '<td style="width: 60%; border: 1px solid #d0d0d0; padding: 0; vertical-align: top;">'+
+          '<table style="width: 100%; border-collapse: collapse; border: none;">'+
+            '<tr>'+
+              '<td style="width: 45%; padding: 4.5px 8px; font-size: 11px; color: #555; border-bottom: 1px solid #e2e2e2; border-right: 1px solid #e2e2e2; font-weight: bold; font-family: Arial, Helvetica, sans-serif;">Employee Name</td>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; font-weight: bold; color: #111; border-bottom: 1px solid #e2e2e2; font-family: Arial, Helvetica, sans-serif;">'+esc(r.name)+'</td>'+
+            '</tr>'+
+            '<tr>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; color: #555; border-bottom: 1px solid #e2e2e2; border-right: 1px solid #e2e2e2; font-weight: bold; font-family: Arial, Helvetica, sans-serif;">Designation</td>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; font-weight: bold; color: #111; border-bottom: 1px solid #e2e2e2; font-family: Arial, Helvetica, sans-serif;">'+esc(r.desig)+'</td>'+
+            '</tr>'+
+            '<tr>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; color: #555; border-bottom: 1px solid #e2e2e2; border-right: 1px solid #e2e2e2; font-weight: bold; font-family: Arial, Helvetica, sans-serif;">Employee ID</td>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; font-weight: bold; color: #111; border-bottom: 1px solid #e2e2e2; font-family: Arial, Helvetica, sans-serif;">'+esc(r.id)+'</td>'+
+            '</tr>'+
+            '<tr>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; color: #555; border-bottom: 1px solid #e2e2e2; border-right: 1px solid #e2e2e2; font-weight: bold; font-family: Arial, Helvetica, sans-serif;">Employee Type</td>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; font-weight: bold; color: #111; border-bottom: 1px solid #e2e2e2; font-family: Arial, Helvetica, sans-serif;">'+esc(r.type||'Permanent')+'</td>'+
+            '</tr>'+
+            '<tr>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; color: #555; border-bottom: 1px solid #e2e2e2; border-right: 1px solid #e2e2e2; font-weight: bold; font-family: Arial, Helvetica, sans-serif;">Date of Joining</td>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; font-weight: bold; color: #111; border-bottom: 1px solid #e2e2e2; font-family: Arial, Helvetica, sans-serif;">'+esc(r.doj)+'</td>'+
+            '</tr>'+
+            '<tr>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; color: #555; border-bottom: 1px solid #e2e2e2; border-right: 1px solid #e2e2e2; font-weight: bold; font-family: Arial, Helvetica, sans-serif;">Pay Days</td>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; font-weight: bold; color: #111; border-bottom: 1px solid #e2e2e2; font-family: Arial, Helvetica, sans-serif;">'+esc(r.days===''||r.days===null?'':String(r.days))+'</td>'+
+            '</tr>'+
+            '<tr>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; color: #555; border-right: 1px solid #e2e2e2; font-weight: bold; font-family: Arial, Helvetica, sans-serif;">UAN Number</td>'+
+              '<td style="padding: 4.5px 8px; font-size: 11px; font-weight: bold; color: #111; font-family: Arial, Helvetica, sans-serif;">'+esc(r.uan)+'</td>'+
+            '</tr>'+
+          '</table>'+
+        '</td>'+
+        '<td style="width: 40%; border: 1px solid #d0d0d0; padding: 12px; vertical-align: middle; text-align: center; background: #fafafa;">'+
+          '<div style="font-size: 26px; font-weight: bold; color: #111; font-family: Arial, Helvetica, sans-serif; letter-spacing: 0.2px;">'+money(c.net)+'</div>'+
+        '</td>'+
+      '</tr>'+
+    '</table>'+
+
+    // Earnings & Deductions
+    '<table class="bx">'+COLS+'<thead><tr><th>Earnings</th><th class="r">Amount</th><th>Deductions</th><th class="r">Amount</th></tr></thead><tbody>'+
+      ln('Basic',c.basic,"PF Employee's Contribution",c.pfEe)+
+      ln('Special Allowance',c.spec,"ESIC Employee's Contribution",c.esicEe)+
+      '<tr><td></td><td class="r"></td><td>P.Tax</td><td class="r">'+money(c.ptax)+'</td></tr>'+
+      '<tr class="tline"><td>Gross Earnings</td><td class="r">'+money(c.gross)+'</td><td>Total Deductions</td><td class="r">'+money(c.ded)+'</td></tr>'+
+    '</tbody></table>'+
+
+    // Net Pay and CTC
+    '<table class="bx">'+COLS+'<thead><tr><th>Net Pay</th><th class="r">Amount</th><th>CTC</th><th class="r">Amount</th></tr></thead><tbody>'+
+      ln('Gross Earnings',c.gross,'Gross Earnings',c.gross)+
+      ln('Total Deduction (Employee)',c.ded,"PF Employer's Contribution",c.pfEr)+
+      '<tr><td></td><td class="r"></td><td>ESIC Employer\'s Contribution</td><td class="r">'+money(c.esicEr)+'</td></tr>'+
+      '<tr class="tline"><td>Total Net Payable</td><td class="r">'+money(c.net)+'</td><td>Monthly CTC</td><td class="r">'+money(c.ctc)+'</td></tr>'+
+    '</tbody></table>'+
+
+    // Words block
+    '<div class="words">Total Net Payable '+money(c.net)+' ('+words(c.net)+')</div>'+
+
+    // Signature and stamp section
+    '<div style="position: relative; margin-top: 24px; text-align: right; min-height: 95px; font-family: Arial, Helvetica, sans-serif;">'+
+      '<div style="position: absolute; right: 40px; top: -15px; transform: rotate(-10deg); opacity: 0.8; pointer-events: none; display: inline-block;">'+
+        stampHTML+
+      '</div>'+
+      '<div class="sign" style="position: absolute; right: 0; bottom: 0; text-align: center;">'+
+        sigHTML+
+        '<div class="ln" style="display:inline-block; border-top:1px solid #666; padding-top:5px; min-width:180px; text-align:center;">'+esc(sg)+'</div>'+
+      '</div>'+
+    '</div>'+
+    '<div class="foot">This is a computer generated payslip and does not require a signature.</div>'+
+  '</div>';
+}
+
+/* ------------------------------------------------------------------ */
+/*  PREVIEW                                                            */
+/* ------------------------------------------------------------------ */
+function preview(i){
+  previewIdx=i;
+  document.getElementById('mTitle').textContent='Payslip — '+(rows[i].name||'Employee');
+  const box=document.getElementById('previewBox');
+  box.style.transform='none'; box.style.height='auto';
+  box.innerHTML=slipHTML(rows[i]);
+  document.getElementById('modal').classList.add('show');   // show first so widths are real
+  requestAnimationFrame(()=>{
+    const w=box.parentElement.clientWidth-36;
+    const s=Math.min(1,w/794);
+    const h=box.firstElementChild.offsetHeight;
+    box.style.transform='scale('+s+')';
+    box.style.height=(h*s)+'px';
+  });
+}
+function closeModal(){ document.getElementById('modal').classList.remove('show'); }
+document.getElementById('modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
+function dlCurrent(){ if(previewIdx>=0) dlOne(previewIdx); }
+function dlCurrentWord(){ if(previewIdx>=0) dlWordOne(previewIdx); }
+
+/* ------------------------------------------------------------------ */
+/*  PDF / Word Export                                                  */
+/* ------------------------------------------------------------------ */
+function fileName(r){
+  const base=(r.name||'PAYSLIP').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return base+'.pdf';
+}
+function fileNameWord(r){
+  const base=(r.name||'PAYSLIP').toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_|_$/g,'');
+  return base+'.doc';
+}
+async function makePdfBlob(r){
+  const host=document.getElementById('slipHost');
+  host.innerHTML=slipHTML(r);
+  const el=host.firstElementChild;
+  const canvas=await html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false});
+  host.innerHTML='';
+  const {jsPDF}=window.jspdf;
+  const pdf=new jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
+  const pw=210, ph=297;
+  let iw=pw, ih=canvas.height*pw/canvas.width;
+  if(ih>ph){ ih=ph; iw=canvas.width*ph/canvas.height; }
+  pdf.addImage(canvas.toDataURL('image/jpeg',0.96),'JPEG',(pw-iw)/2,0,iw,ih);
+  return pdf.output('blob');
+}
+function makeWordBlob(r){
+  const content = slipHTML(r);
+  const html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" '+
+        'xmlns:w="urn:schemas-microsoft-com:office:word" '+
+        'xmlns="http://www.w3.org/TR/REC-html40">'+
+    '<head>'+
+      '<meta charset="utf-8">'+
+      '<!--[if gte mso 9]>'+
+      '<xml>'+
+        '<w:WordDocument>'+
+          '<w:View>Print</w:View>'+
+          '<w:Zoom>100</w:Zoom>'+
+          '<w:DoNotOptimizeForBrowser/>'+
+        '</w:WordDocument>'+
+      '</xml>'+
+      '<![endif]-->'+
+      '<style>'+
+        '@page {'+
+          'size: 21cm 29.7cm;'+
+          'margin: 1.5cm 1.5cm 1.5cm 1.5cm;'+
+        '}'+
+        'body {'+
+          'font-family: Arial, Helvetica, sans-serif;'+
+          'font-size: 11px;'+
+          'color: #1a1a1a;'+
+          'margin: 0;'+
+          'padding: 0;'+
+        '}'+
+        '.slip {'+
+          'width: 100%;'+
+          'max-width: 700px;'+
+          'margin: 0 auto;'+
+          'background: #fff;'+
+        '}'+
+        'table.bx {'+
+          'width: 100%;'+
+          'border-collapse: collapse;'+
+          'margin-bottom: 14px;'+
+          'border: 1px solid #cccccc;'+
+        '}'+
+        'table.bx th {'+
+          'background: #ea580c;'+
+          'color: #ffffff;'+
+          'font-size: 10px;'+
+          'text-transform: uppercase;'+
+          'letter-spacing: .5px;'+
+          'padding: 7px 9px;'+
+          'text-align: left;'+
+          'border: 1px solid #d04a08;'+
+          'font-weight: bold;'+
+        '}'+
+        'table.bx td {'+
+          'padding: 6px 9px;'+
+          'border: 1px solid #e2e2e2;'+
+          'font-size: 11px;'+
+        '}'+
+        'table.bx td.r, table.bx th.r {'+
+          'text-align: right;'+
+        '}'+
+        'table.bx tr.tline td {'+
+          'font-weight: bold;'+
+          'background: #fff3e6;'+
+          'border-top: 1.5px solid #ea580c;'+
+          'color: #111111;'+
+        '}'+
+        '.words {'+
+          'border: 1px solid #ea580c;'+
+          'background: #ea580c;'+
+          'color: #ffffff;'+
+          'padding: 10px;'+
+          'text-align: center;'+
+          'font-size: 11px;'+
+          'font-weight: bold;'+
+          'border-radius: 4px;'+
+        '}'+
+        '.foot {'+
+          'margin-top: 18px;'+
+          'text-align: center;'+
+          'font-size: 9px;'+
+          'color: #888;'+
+          'border-top: 1px solid #eee;'+
+          'padding-top: 6px;'+
+        '}'+
+      '</style>'+
+    '</head>'+
+    '<body>'+
+      content+
+    '</body>'+
+    '</html>';
+
+  return new Blob([html], { type: 'application/msword;charset=utf-8' });
+}
+
+async function dlOne(i){
+  busy(true,'Creating the PDF payslip…');
+  try{
+    const blob=await makePdfBlob(rows[i]);
+    saveBlob(blob,fileName(rows[i]));
+  }catch(e){ alert('Could not create the PDF: '+e.message); }
+  busy(false);
+}
+async function dlWordOne(i){
+  busy(true,'Creating the Word payslip…');
+  try{
+    const blob=makeWordBlob(rows[i]);
+    saveBlob(blob,fileNameWord(rows[i]));
+  }catch(e){ alert('Could not create the Word file: '+e.message); }
+  busy(false);
+}
+
+async function zipAll(){
+  const list=rows.filter(r=>r.sel);
+  if(!list.length){ alert('No employees are ticked. Tick at least one person in the table.'); return; }
+  const zip=new JSZip(); const used={};
+  for(let i=0;i<list.length;i++){
+    busy(true,'Creating payslip '+(i+1)+' of '+list.length+' — '+(list[i].name||''));
+    await new Promise(r=>setTimeout(r,0));
+    let nm=fileName(list[i]);
+    if(used[nm]){ used[nm]++; nm=nm.replace('.pdf','_'+used[nm]+'.pdf'); } else used[nm]=1;
+    zip.file(nm, await makePdfBlob(list[i]));
+  }
+  busy(true,'Packing the ZIP file…');
+  const blob=await zip.generateAsync({type:'blob'});
+  const mo=document.getElementById('month').value, yr=document.getElementById('year').value;
+  saveBlob(blob,'Payslips_'+mo+'_'+yr+'.zip');
+  busy(false);
+}
+async function zipAllWord(){
+  const list=rows.filter(r=>r.sel);
+  if(!list.length){ alert('No employees are ticked. Tick at least one person in the table.'); return; }
+  const zip=new JSZip(); const used={};
+  for(let i=0;i<list.length;i++){
+    busy(true,'Creating Word payslip '+(i+1)+' of '+list.length+' — '+(list[i].name||''));
+    await new Promise(r=>setTimeout(r,0));
+    let nm=fileNameWord(list[i]);
+    if(used[nm]){ used[nm]++; nm=nm.replace('.doc','_'+used[nm]+'.doc'); } else used[nm]=1;
+    zip.file(nm, makeWordBlob(list[i]));
+  }
+  busy(true,'Packing the ZIP file…');
+  const blob=await zip.generateAsync({type:'blob'});
+  const mo=document.getElementById('month').value, yr=document.getElementById('year').value;
+  saveBlob(blob,'Payslips_Word_'+mo+'_'+yr+'.zip');
+  busy(false);
+}
+
+function saveBlob(blob,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+}
+
+/* ------------------------------------------------------------------ */
+/*  EXCEL EXPORT                                                       */
+/* ------------------------------------------------------------------ */
+function exportRegister(){
+  if(!rows.length){ alert('There are no employees loaded yet.'); return; }
+  const head=['Employee Name','Designation','Employee ID','Employee Type','Date of Joining','Pay Days','UAN Number',
+              'Basic','Sp Allowance','Gross',"PF_Employee's Contribution","PF_Employer's Contribution",
+              "ESIC_Employee's Contribution","ESIC_Employer's Contribution",'P.Tax','Total Deductions','Net','CTC'];
+  const data=[head];
+  rows.forEach(r=>{const c=calc(r);
+    data.push([r.name,r.desig,r.id,r.type,r.doj,r.days,r.uan,c.basic,c.spec,c.gross,
+               c.pfEe,c.pfEr,c.esicEe,c.esicEr,c.ptax,c.ded,c.net,c.ctc]);});
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=head.map((h,i)=>({wch:i<7?18:14}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Payslip Register');
+  const mo=document.getElementById('month').value, yr=document.getElementById('year').value;
+  XLSX.writeFile(wb,'Payslip_Register_'+mo+'_'+yr+'.xlsx');
+}
+
+/* ------------------------------------------------------------------ */
+/*  SAVE / RESTORE                                                     */
+/* ------------------------------------------------------------------ */
+const KEY='payslip_generator_data_v1';
+function saveLocal(){
+  try{
+    localStorage.setItem(KEY,JSON.stringify({rows,
+      co:document.getElementById('coName').value, ad:document.getElementById('coAddr').value,
+      mo:document.getElementById('month').value, yr:document.getElementById('year').value}));
+    show('ok','<b>Saved.</b> This data will still be here the next time you open the site on this computer.');
+  }catch(e){ show('warn','Saving is not available in this browser window. Use the Excel export instead.'); }
+}
+function loadLocal(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(!raw){ show('warn','Nothing has been saved on this computer yet.'); return; }
+    const d=JSON.parse(raw);
+    rows=d.rows||[];
+    if(d.co) document.getElementById('coName').value=d.co;
+    if(d.ad) document.getElementById('coAddr').value=d.ad;
+    if(d.mo) document.getElementById('month').value=d.mo;
+    if(d.yr) document.getElementById('year').value=d.yr;
+    render(); show('ok','<b>Restored '+rows.length+' employees</b> from this computer.');
+  }catch(e){ show('err','Saved data could not be read.'); }
+}
+
+['coName','coAddr','month','year','cur','signLbl'].forEach(id=>{
+  document.getElementById(id).addEventListener('change',()=>{ totals(); });
+});
+render();
+</script>
+</body>
+</html>
